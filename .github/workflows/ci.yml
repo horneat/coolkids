@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+        ports:
+          - 3306:3306
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.0'
+
+    - name: Composer dependencies
+      run: composer install
+
+    - name: WordPress test env
+      run: |
+        curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+        chmod +x wp-cli.phar
+        sudo mv wp-cli.phar /usr/local/bin/wp
+        wp core download
+        wp config create --dbname=wordpress --dbuser=root --dbpass=root --dbhost=127.0.0.1
+        wp db create
+        wp core install --url="http://localhost" --title="Test Site" --admin_user="admin" --admin_password="admin" --admin_email="admin@example.com"
+
+    - name: Run PHP linter
+      run: composer lint
+
+    - name: Run WordPress tests
+      run: composer test
